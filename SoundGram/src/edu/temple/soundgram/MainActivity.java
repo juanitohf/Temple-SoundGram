@@ -1,16 +1,17 @@
 package edu.temple.soundgram;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.nostra13.universalimageloader.core.ImageLoader;
-
-import edu.temple.soundgram.util.API;
-import edu.temple.soundgram.util.UploadSoundGramService;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -22,8 +23,10 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -33,17 +36,22 @@ import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.Toast;
 
+import com.nostra13.universalimageloader.core.ImageLoader;
+
+import edu.temple.soundgram.util.API;
+import edu.temple.soundgram.util.UploadSoundGramService;
+
 public class MainActivity extends Activity {
 	
-	int userId = 111;
 	
-
+	int userId = 111;
 	int TAKE_PICTURE_REQUEST_CODE = 11111111;
 	int RECORD_AUDIO_REQUEST_CODE = 11111112;
 	
 	File photo, audio;
-	
 	LinearLayout ll;
+	
+	int d;
 	
 	
 	// Refresh stream
@@ -64,6 +72,16 @@ public class MainActivity extends Activity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+		
+		
+		   File basePath = new File(android.os.Environment.getExternalStorageDirectory(),"SoundGram/cache");
+   	    
+   	    ////// CLEAN FILES OF MY DEVICE TO CLEAN THE MEMORY
+   	        File[] filesToClean=basePath.listFiles();
+   	        for(File f:filesToClean)
+   	            f.delete();
+   	    /////////////////////////
+		
 		
 		
 		// Register listener for messages received while app is in foreground
@@ -139,6 +157,7 @@ public class MainActivity extends Activity {
 				public void onClick(View v) {
 					MediaPlayer mPlayer = new MediaPlayer();
 			        try {
+			        	
 			            mPlayer.setDataSource(audio.toString());
 			            mPlayer.prepare();
 			            mPlayer.start();
@@ -250,9 +269,54 @@ public class MainActivity extends Activity {
 			public void onClick(View v) {
 				MediaPlayer mPlayer = new MediaPlayer();
 		        try {
-		            mPlayer.setDataSource(soundgramObject.getString("audio_url"));
-		            mPlayer.prepare();
-		            mPlayer.start();
+		        	
+		        	//// GET THE NAME OF MY FILE TO STORE ON CACHE 
+		        	String url = soundgramObject.getString("audio_url");
+		        	String fileName = url.substring( url.lastIndexOf('=')+1, url.length());
+		        	
+		        	/////CHECK IF THE FILE IS ON THE IS ON CACHE
+		        	
+		        
+		        	    File basePath = new File(android.os.Environment.getExternalStorageDirectory(),"SoundGram/cache");
+		        	    
+		        	
+		        	    Log.e("FileName", basePath.toString());
+		        	    File fullPath = new File(basePath, fileName);
+		        	    	
+		        	    Log.e("FileName", fullPath.toString());
+		        	    
+		        	    
+		        	  
+		        	    if (fullPath.exists()){
+		        	    	
+		        	    	/// PLAY FILE FROM CACHE DIRECTORY ////
+		        	
+		        	    	 /// Debug purpose
+			        	    Log.e("FileName", fileName);   
+			        	   	Log.e("Exist", "YES");
+			        	   	Log.e("FileName", fullPath.toString());
+		        	    	
+		        	
+					        mPlayer.setDataSource(fullPath.toString());
+					        mPlayer.prepare();
+					        mPlayer.start();
+					      
+		        	    	
+		        	    }else{
+		        	    	
+		        	   	 /// Debug purpose
+			        	    Log.e("FileName", fileName);   
+			        	    Log.e("Exist", "NO");
+			        	    Log.e("FileName", fullPath.toString());
+		        	    	
+		        	
+		        	    	saveFileCache(url, fileName);
+		        	    	
+		        	    	
+		        	    }
+		        	      
+		        	
+		            
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -260,7 +324,6 @@ public class MainActivity extends Activity {
 		});
 		
 		soundgramLayout.addView(soundgramImageView);
-		
 		return soundgramLayout;
 	}
 	
@@ -270,11 +333,103 @@ public class MainActivity extends Activity {
 		unregisterReceiver(refreshReceiver);
 	}
 	
+	
+	
+	
+	
+	
+	
+public void saveFileCache(final String urlFile, final String fileName) throws IOException, InterruptedException{
+		
+	Log.e("Message", "Saving file");
+	
+	Thread t = new Thread() {
+
+		
+	 public void run() {
+	 Looper.prepare(); //For Preparing Message Pool for the child Thread
+		
+		try{
+
+			final File cacheDir = new File(android.os.Environment.getExternalStorageDirectory(),"SoundGram/cache");
+			String Full_URL = cacheDir.toString()+"/"+fileName;
+			Log.e("Full URL", Full_URL);
+			
+			if(!cacheDir.exists())
+			   cacheDir.mkdirs();
+
+		
+	            	File f=new File(cacheDir,fileName);
+					URL url = new URL(urlFile); 
+		
+					            InputStream input = new BufferedInputStream(url.openStream());
+					            OutputStream output = new FileOutputStream(f);
+		
+					            byte data[] = new byte[1024];
+					            long total = 0;
+					            int count=0;
+					            while ((count = input.read(data)) != -1) {
+					                total++;
+					                output.write(data, 0, count);
+					            }
+		
+					            output.flush();
+					            output.close();
+					            input.close();
+					            
+					          Message msg = Message.obtain();
+					  		  msg.obj = Full_URL;
+
+					  		 playSound.sendMessage(msg);
+					            
+					}
+					catch(Exception e){
+						
+						e.printStackTrace();
+						
+					}
+		
+			Looper.loop(); //Loop in the message queue
+	           }
+	
+		};
+	
+	  t.start();
+	 
+  	
+		  
+} /// end saveFileCache function
+	
+	
+    ////// Execute the file when the thread is finish /////// 
+Handler playSound = new Handler(new Handler.Callback() {
+	
+	public boolean handleMessage(Message msg) {
+		
+		
+		Log.e("Hanle section",msg.obj.toString());
+		
+		MediaPlayer mPlayer = new MediaPlayer();
+        try {
+			mPlayer.setDataSource(msg.obj.toString());
+			mPlayer.prepare();
+			mPlayer.start();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return false;
+      
+               
+       
+	}
+});
+
+
+
+
+
 }
-
-
-
-
 
 
 
